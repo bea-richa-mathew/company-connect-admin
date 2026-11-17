@@ -21,12 +21,17 @@ export default function TeamMessages() {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
 
+  const adminToken = isAuthenticated
+    ? localStorage.getItem("company_portal_admin_token")
+    : null;
+
   useEffect(() => {
     if (loading) return;
 
     if (!isAuthenticated) {
       setCurrentUserId(null);
       setChecking(false);
+      setError("");
       return;
     }
 
@@ -37,6 +42,16 @@ export default function TeamMessages() {
       setError("");
 
       try {
+        const token = localStorage.getItem(
+          "company_portal_admin_token"
+        );
+
+        if (!token) {
+          throw new Error(
+            "Administrator token is missing. Please log in again."
+          );
+        }
+
         const body = await fetchAdminSession();
 
         const user = (
@@ -92,7 +107,7 @@ export default function TeamMessages() {
     );
   }
 
-  if (!isAuthenticated || error || !currentUserId) {
+  if (!isAuthenticated || error || !currentUserId || !adminToken) {
     return (
       <div
         role="alert"
@@ -105,7 +120,7 @@ export default function TeamMessages() {
 
   return (
     <TeamChat
-      token={null}
+      token={adminToken}
       currentUserId={currentUserId}
       title="Team Messages"
     />
