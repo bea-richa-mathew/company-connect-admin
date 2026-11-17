@@ -548,6 +548,9 @@ export async function deleteAnnouncement(
 // ADMIN AUTHENTICATION
 // ===========================
 
+
+const ADMIN_TOKEN_KEY = "company_portal_admin_token";
+
 export async function fetchAdminSession() {
   const response = await api.get("/auth/me");
   return response.data;
@@ -557,24 +560,50 @@ export async function loginAdmin(
   email: string,
   password: string
 ) {
-  const response = await api.post(
-    "/auth/login",
-    {
-      email,
-      password,
-    }
-  );
+  const response = await api.post("/auth/login", {
+    email,
+    password,
+  });
 
-  return response.data;
+  const body = response.data;
+
+  const user = body.user ?? body.data?.user;
+
+  if (user?.role !== "admin") {
+    throw new Error(
+      "This account does not have admin access."
+    );
+  }
+
+  const token =
+    body.token ??
+    body.data?.token ??
+    body.accessToken ??
+    body.data?.accessToken;
+
+  if (!token || typeof token !== "string") {
+    throw new Error(
+      "Login succeeded, but the backend did not return an authentication token."
+    );
+  }
+
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+
+  return body;
 }
 
 export async function logoutAdmin() {
-  const response = await api.post(
-    "/auth/logout"
-  );
+  const token = localStorage.getItem(ADMIN_TOKEN_KEY);
 
-  return response.data;
+  try {
+    if (token) {
+      await api.post("/auth/logout");
+    }
+  } finally {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+  }
 }
+
 export interface ContactMessage {
   _id: string;
   name: string;

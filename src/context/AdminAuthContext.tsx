@@ -13,6 +13,8 @@ import {
   logoutAdmin,
 } from "../api/apiServices";
 
+const ADMIN_TOKEN_KEY = "company_portal_admin_token";
+
 interface AdminAuthContextValue {
   isAuthenticated: boolean;
   token: string | null;
@@ -32,79 +34,127 @@ export function AdminAuthProvider({
 }: {
   children: ReactNode;
 }) {
+  const [token, setToken] = useState<string | null>(
+    () => localStorage.getItem(ADMIN_TOKEN_KEY)
+  );
+
   const [isAuthenticated, setIsAuthenticated] =
     useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
+  // Verify existing admin session
   useEffect(() => {
     let mounted = true;
 
-    fetchAdminSession()
-      .then((body) => {
+    const verifySession = async () => {
+      try {
+        const savedToken = localStorage.getItem(
+          ADMIN_TOKEN_KEY
+        );
+
+        if (!savedToken) {
+          if (mounted) {
+            setToken(null);
+            setIsAuthenticated(false);
+          }
+          return;
+        }
+
+        const body = await fetchAdminSession();
+
         const user =
           body.user ?? body.data?.user;
 
         if (mounted) {
-          setIsAuthenticated(
-            user?.role === "admin"
-          );
+          if (user?.role === "admin") {
+            setToken(savedToken);
+            setIsAuthenticated(true);
+          } else {
+            localStorage.removeItem(ADMIN_TOKEN_KEY);
+            setToken(null);
+            setIsAuthenticated(false);
+          }
         }
-      })
-      .catch(() => {
+      } catch (error) {
+        console.error(
+          "Admin session verification failed:",
+          error
+        );
+
         if (mounted) {
+          localStorage.removeItem(ADMIN_TOKEN_KEY);
+          setToken(null);
           setIsAuthenticated(false);
         }
-      })
-      .finally(() => {
+      } finally {
         if (mounted) {
           setLoading(false);
         }
-      });
+      }
+    };
+
+    void verifySession();
 
     return () => {
       mounted = false;
     };
   }, []);
 
+  // Admin login
   const login = async (
     email: string,
     password: string
-  ) => {
-    const body = await loginAdmin(
-      email,
-      password
-    );
+  ): Promise<void> => {
+    const body = await loginAdmin(email, password);
 
     const user =
       body.user ?? body.data?.user;
 
     if (user?.role !== "admin") {
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+      setToken(null);
+      setIsAuthenticated(false);
+
       throw new Error(
         "This account does not have admin access."
       );
     }
 
+    const savedToken = localStorage.getItem(
+      ADMIN_TOKEN_KEY
+    );
+
+    if (!savedToken) {
+      throw new Error(
+        "Admin login token was not saved."
+      );
+    }
+
+    setToken(savedToken);
     setIsAuthenticated(true);
   };
 
+  // Admin logout
   const logout = () => {
     setIsAuthenticated(false);
+    setToken(null);
 
     void logoutAdmin().catch((error) => {
       console.error(
-        "Unable to clear the admin session cookie.",
+        "Unable to complete admin logout:",
         error
       );
     });
+
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
   };
 
   return (
     <AdminAuthContext.Provider
       value={{
         isAuthenticated,
-        token: null,
+        token,
         loading,
         login,
         logout,
@@ -116,9 +166,7 @@ export function AdminAuthProvider({
 }
 
 export function useAdminAuth() {
-  const context = useContext(
-    AdminAuthContext
-  );
+  const context = useContext(AdminAuthContext);
 
   if (!context) {
     throw new Error(
