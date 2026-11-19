@@ -4,7 +4,7 @@ import axios from "axios";
 const api = axios.create({
   baseURL:
     import.meta.env.VITE_API_URL ||
-    "https://company-connect-backend-production.up.railway.app/api",
+    "https://company-connect-backend-1.onrender.com/api",
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
